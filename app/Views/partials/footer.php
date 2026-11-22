@@ -1,1 +1,1 @@
-<footer><small>Powered by PmntCode MVC</small></footer>
+<footer class="site-footer"><div class="container footer-inner"><a class="brand" href="/"><span class="brand-mark">&lt;/&gt;</span><span>PmntCode <strong>MVC</strong></span></a><span>Feito com PHP, simplicidade e boas práticas.</span><small>© <?= date('Y') ?> PmntCode MVC · MIT License</small></div></footer>

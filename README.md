@@ -1,105 +1,174 @@
-# PmntCode MVC 1.0.0
+# PmntCode MVC
 
-Router-focused PHP 8.2+ foundation. **No Model/View/ORM implementation.** This is a release candidate architecture; deployment readiness depends on successful CI, security review and deployment tests.
+Framework leve para aplicações PHP **8.2+**, com roteamento HTTP, controllers, injeção de dependências, views e layouts em PHP nativo. O projeto inclui um site demonstrativo responsivo e exemplos de rotas de API.
 
-## Installation (Linux Mint)
+> **Estado do projeto:** base em desenvolvimento. Antes de usar em produção, execute testes, revise a segurança e valide a implantação. O projeto não fornece ORM, autenticação, proteção CSRF, gerenciamento de sessões, limitação de requisições ou validação de entradas pronta para uso.
+
+**Repositório:** https://github.com/pmntcode/pmntcode-mvc
+
+## Requisitos e instalação
+
+- PHP 8.2 ou superior
+- Composer
+- Extensões PHP necessárias às ferramentas de desenvolvimento, como `mbstring` e `xml`
+
+No Linux Mint (com uma versão compatível do PHP disponível):
 
 ```bash
+sudo apt update
 sudo apt install php-cli php-mbstring php-xml php-curl unzip composer
 composer install
+```
+
+Para verificar os testes e a análise estática:
+
+```bash
 composer check
+```
+
+## Executar em desenvolvimento
+
+O projeto contém `public/router.php` para o servidor embutido do PHP:
+
+```bash
 php -S 127.0.0.1:8000 -t public public/router.php
 ```
 
-Visit `http://127.0.0.1:8000`, `/hello/Ana`, `/api/v1/users/42`.
+Abra `http://127.0.0.1:8000/`. O servidor embutido destina-se somente a desenvolvimento.
 
-## Routing
+## Apache e .htaccess
 
-```php
-$router = new \PmntCode\Mvc\Routing\Router();
-$id = $router->get('/users/{id}', [UserController::class, 'show']);
-$router->where($id, 'id', '[0-9]+');
-$router->name($id, 'users.show');
-echo $router->url('users.show', ['id' => 42]); // /users/42
-$router->group('/api', function ($r) { $r->post('/items', fn($request) => ['ok' => true]); });
+No Apache, configure o **DocumentRoot** para o diretório `public/`, habilite `mod_rewrite` e permita regras de reescrita (`AllowOverride FileInfo` ou `All`). Crie `public/.htaccess` com:
+
+```apache
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
 ```
 
-Controller constructors are resolved by the container, including class-typed dependencies. Bind interfaces explicitly with `$container->bind(InterfaceName::class, fn($c) => new Implementation());`. Middleware receives `(Request $request, callable $next): Response`, and may short-circuit. MiddlewareInterface is supported. Route methods return an integer ID for `where()`, `name()` and `routeMiddleware()`.
+O `.htaccess` encaminha URLs que não correspondem a arquivos ou diretórios reais para `public/index.php`, o **front controller**. Esse arquivo inicializa o container, carrega `routes/web.php`, cria a requisição e chama o Router MVC. O arquivo `public/router.php` não é necessário no Apache. **A configuração `.htaccess` acima é uma opção documentada; ela não foi incluída automaticamente no projeto.**
 
-## HTTP behavior and security
+## Rotas existentes
 
-- Encoded URL path decoded once; invalid percent escapes, malformed UTF-8, dot segments and backslashes rejected with 400.
-- Request path max 4096 bytes; server should also enforce request body/header/time limits.
-- Errors logged server-side and generic 500 returned unless debug is enabled; **never enable debug in production**.
-- Response header names and values validated to mitigate header injection.
-- GET routes support HEAD. Unknown paths return 404; unsupported methods on matched paths return 405 with Allow.
-- The built-in PHP server is **development only**; production requires Nginx or Apache pointing at `public/`, TLS, restricted filesystem permissions, and appropriate proxy configuration.
-- Router does not provide authentication, CSRF protection, rate limiting, CORS policy, session management or request validation. Applications must implement these independently.
-- Treat route constraints as trusted developer configuration, not user input; avoid catastrophic-backtracking regexes.
+Definidas em `routes/web.php`:
 
-## Quality gates
+| Método | Caminho              | Finalidade                                       |
+| ------ | -------------------- | ------------------------------------------------ |
+| GET    | `/`                  | Página inicial                                   |
+| GET    | `/recursos`          | Recursos do framework                            |
+| GET    | `/arquitetura`       | Arquitetura MVC                                  |
+| GET    | `/comecar`           | Guia para começar                                |
+| GET    | `/hello/{name}`      | Exemplo JSON de saudação                         |
+| GET    | `/api/v1/users/{id}` | Exemplo de consulta de usuário (ID numérico)     |
+| POST   | `/api/v1/echo`       | Exemplo de resposta JSON com corpo da requisição |
+
+As quatro páginas do site são views separadas, embora seus métodos estejam atualmente no mesmo `HomeController`.
+
+Exemplo de declaração de rota:
+
+```php
+$router->get('/recursos', [HomeController::class, 'recursos']);
+
+$idRoute = $router->get('/api/v1/users/{id}', [UserController::class, 'show']);
+$router->where($idRoute, 'id', '[0-9]+');
+$router->name($idRoute, 'users.show');
+```
+
+O Router também disponibiliza `post`, `put`, `patch`, `delete`, `options`, `any`, `group`, `middleware`, `routeMiddleware`, `where`, `name`, `url` e `dispatch`. Rotas podem usar middlewares e restrições de parâmetros. Uma rota GET também aceita HEAD; caminhos inexistentes retornam 404 e métodos não permitidos retornam 405 com `Allow`.
+
+## Arquitetura e organização
+
+```text
+app/
+  Controllers/          # HomeController e UserController
+  Views/
+    home/               # Página inicial
+    recursos/           # Página de recursos
+    arquitetura/        # Página de arquitetura
+    comecar/            # Guia inicial
+    layouts/            # Layout HTML compartilhado
+    partials/           # Cabeçalho e rodapé
+config/views.php        # Caminho dos templates
+public/
+  index.php             # Front controller
+  router.php            # Suporte ao servidor PHP embutido
+  assets/css/app.css    # Estilos responsivos
+routes/web.php          # Definições de rotas
+src/                    # Núcleo do framework
+  Container/            # Resolução de dependências
+  Routing/              # Router MVC
+  View/                 # Renderização de templates
+tests/                  # Testes automatizados
+```
+
+O fluxo de uma requisição é: **servidor web → `public/index.php` → Router → Controller → View/Response**.
+
+## Injeção de dependências
+
+O `Container` resolve dependências de classes nos construtores dos controllers. O `HomeController`, por exemplo, recebe `ViewInterface`:
+
+```php
+public function __construct(private readonly ViewInterface $views) {}
+```
+
+Em `public/index.php`, a implementação é registrada explicitamente:
+
+```php
+$container = new Container();
+$container->instance(
+    ViewInterface::class,
+    new View((require dirname(__DIR__) . '/config/views.php')['path'])
+);
+$router = new Router($container);
+```
+
+Interfaces podem ser associadas a implementações com `bind(...)`. Dependências de classes concretas podem ser resolvidas automaticamente quando seus construtores são compatíveis.
+
+## Views, layouts e segurança de saída
+
+Os templates ficam em `app/Views/` e são renderizados com PHP nativo, sem engine externa. Exemplo:
+
+```php
+return $this->views->render(
+    'home.index',
+    ['title' => 'Início', 'name' => 'PmntCode MVC'],
+    'layouts.app'
+);
+```
+
+- `render(...)` produz uma resposta HTML.
+- `partial('partials.header', [...])` produz um trecho HTML.
+- Use `$view->escape($value)` ao exibir dados não confiáveis.
+- O layout recebe `$content` com HTML renderizado; não injete HTML fornecido por usuários sem tratamento.
+- O diretório de templates é definido em `config/views.php`. Mantenha-o fora de `public/`.
+- Templates PHP são código confiável; não renderize arquivos enviados por usuários.
+
+O cabeçalho compartilha navegação entre as páginas e o botão **Explorar projeto** abre o [repositório no GitHub](https://github.com/pmntcode/pmntcode-mvc) em outra aba.
+
+## Testes e qualidade
 
 ```bash
 composer test
 composer analyse
-find src app public routes -name '*.php' -print0 | xargs -0 -n1 php -l
+composer check
 composer audit
+find src app public routes -name '*.php' -print0 | xargs -0 -n1 php -l
 ```
 
-## Compatibility
+A execução bem-sucedida desses comandos depende das extensões PHP e dependências disponíveis no ambiente. Não presuma que a aplicação está pronta para produção apenas porque passou nos testes locais.
 
-The public API from 0.1.0 (`get`, `post`, `put`, `patch`, `delete`, `options`, `any`, `where`, `middleware`, `routeMiddleware`, `group`, `dispatch`) is retained. URL handling is stricter; invalid request paths now yield HTTP 400.
+## Cuidados de segurança e produção
 
-## Production checklist
+- Utilize Apache ou Nginx com `public/` como raiz do site e HTTPS configurado.
+- Desative a exibição de erros e o modo debug em produção; configure logs e monitoramento.
+- Implemente autenticação, autorização, CSRF, validação de entrada, sessões e rate limiting conforme a aplicação.
+- A camada HTTP rejeita caminhos inválidos e valida cabeçalhos de resposta; configure também limites de corpo, cabeçalhos e tempo no servidor.
+- Execute testes HTTP e de integração no ambiente-alvo, revise dependências e permissões de arquivos.
+- Trate expressões regulares de restrição de rotas como configuração confiável do desenvolvedor.
 
-Run unit and HTTP integration tests against the target PHP version, review dependency advisories, test deployment under Nginx/Apache and TLS, ensure production error display is disabled, configure log retention and monitoring, and add application-specific authentication, CSRF, rate limiting and input validation where relevant.
+## Licença
 
-MIT License.
-
-
-## Views e layouts (1.1.0)
-
-O mecanismo de templates usa PHP nativo em `app/Views`, sem dependências adicionais.
-
-- `ViewInterface::render('home.index', ['name' => 'Ana'], 'layouts.app')` retorna `Response` HTML.
-- `ViewInterface::partial('partials.header', ['name' => 'Ana'])` retorna uma string HTML.
-- Dentro das views, `$view->escape($value)` escapa dados não confiáveis.
-- No layout, `$content` é HTML produzido pela view; **não** passe HTML de usuários diretamente para ele.
-- Nomes de templates são restritos e caminhos reais são verificados para impedir path traversal e symlinks externos.
-- Templates PHP são código confiável da aplicação: nunca renderize arquivos enviados por usuários.
-- A aplicação registra `ViewInterface` no container em `public/index.php`; `HomeController` demonstra injeção pelo construtor.
-- O framework não implementa CSRF, autenticação, CSP específica da aplicação ou sandbox de templates; configure essas proteções conforme a aplicação.
-
-Execute `composer install`, `composer test` e `composer analyse` antes de implantar.
-
-
-## Configuração de views (1.1.1)
-
-Os templates da aplicação ficam em `app/Views/`, incluindo `layouts/`, `partials/` e `home/`.
-O motor de renderização permanece em `src/View/View.php`, separado dos templates.
-
-O diretório padrão é definido em `config/views.php` e utilizado pelo front controller
-(`public/index.php`) e pelos testes (`tests/ViewTest.php`):
-
-```php
-$settings = require dirname(__DIR__) . '/config/views.php';
-$container->instance(ViewInterface::class, new View($settings['path']));
-```
-
-Para mudar o diretório, altere somente `config/views.php`; o diretório deve existir
-e conter templates PHP confiáveis. Não coloque `app/Views` dentro de `public/`.
-
-### Migração de 1.1.0
-
-Mova os templates de `resources/views/` para `app/Views/` e atualize qualquer
-instanciação personalizada de `new View(...)` para usar `config/views.php`.
-As assinaturas públicas do motor de views e dos controllers não mudaram.
-
-### Verificação
-
-```bash
-composer install
-composer test
-composer analyse
-php -S 127.0.0.1:8000 -t public public/router.php
-```
+Distribuído sob a licença MIT. Consulte `LICENSE`.

@@ -9,6 +9,9 @@ use PmntCode\Mvc\Routing\Router;
 
 /** @var Router $router */
 $router->get('/', [HomeController::class, 'index']);
+$router->get('/recursos', [HomeController::class, 'recursos']);
+$router->get('/arquitetura', [HomeController::class, 'arquitetura']);
+$router->get('/comecar', [HomeController::class, 'comecar']);
 $router->get('/hello/{name}', fn($request, $name) => Response::json(['hello' => $name]));
 $router->group('/api/v1', function (Router $router): void {
     $idRoute = $router->get('/users/{id}', [UserController::class, 'show']);

@@ -14,4 +14,18 @@ final class HomeController
     {
         return $this->views->render('home.index', ['title' => 'Início', 'name' => 'PmntCode MVC'], 'layouts.app');
     }
+    public function recursos(): Response
+    {
+        return $this->views->render('recursos.index', ['title' => 'Recursos'], 'layouts.app');
+    }
+
+    public function arquitetura(): Response
+    {
+        return $this->views->render('arquitetura.index', ['title' => 'Arquitetura'], 'layouts.app');
+    }
+
+    public function comecar(): Response
+    {
+        return $this->views->render('comecar.index', ['title' => 'Começar'], 'layouts.app');
+    }
 }
